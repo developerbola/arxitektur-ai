@@ -4,58 +4,59 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const client = new Cerebras({
-  apiKey: process.env.CEREBRAS_API_KEY || "missing_key",
+  apiKey: "csk-jkr5ty3h68vkcvkemcdv5kyn4v492jrycm63td5k5tm5rn3m",
 });
 
 export async function generateLayout(prompt, currentState) {
+  const systemPrompt = `You are an expert AI Architectural Draftsman. 
+Given a user's prompt, conceptualize and generate a real-world architectural floor plan in raw JSON format.
+The canvas coordinates are in meters (e.g. 5.5 for 5.5m).
 
-    const systemPrompt = `You are an expert AI Architectural Draftsman. 
-Given a user's prompt, conceptualize and generate a real-world, perfectly connected architectural floor plan in raw JSON format matching this schema:
+Return JSON matching this exact schema:
 {
-  "points": [{"id": "p1", "x": 0, "y": 0}],
-  "walls": [{"id": "w1", "startPointId": "p1", "endPointId": "p2", "thickness": 20, "isExterior": true}],
-  "openings": [{"id": "o1", "type": "door", "wallId": "w1", "distanceFromStart": 100, "width": 90, "swingDirection": "right_in"}],
-  "rooms": [{"id": "r1", "name": "Living Room", "wallNodes": ["p1", "p2", "p3", "p4"], "computedAreaSqM": 20}],
-  "explanation": "A short architectural rationale for the layout choices."
+  "rooms": [
+    { "type": "room", "x": 0, "y": 0, "width": 5, "height": 4, "label": "Living Room" }
+  ],
+  "elements": [
+    { "type": "door", "x": 2, "y": 0, "width": 1, "height": 0.2 },
+    { "type": "window", "x": 0, "y": 1.5, "width": 0.2, "height": 1.5 }
+  ],
+  "explanation": "A short rationalization."
 }
 
 Rules:
-1. "thickness" must be 30 for perimeter exterior walls, and 15 for interior partition walls.
-2. Assume coordinates map to centimeters. A typical bedroom is minimum 300x300.
-3. Every wall must start and end exactly at matching 'points'. Closed loops are mandatory for all perimeter shapes.
-4. Every door and window must reference an explicit 'wallId' and fall within its maximum length bounds.
-5. Provide ONLY valid JSON. Avoid any text outside the JSON.`;
+1. All elements must specify numeric x, y, width, and height in meters.
+2. The "type" for rooms must be "room". For elements, use "door" or "window".
+3. Rooms should realistically be sized (e.g., minimum 3m x 3m). Doors shouldn't be too wide (e.g. 1m wide).
+4. Provide ONLY valid JSON. Avoid any text outside the JSON.`;
 
-    try {
-      const response = await client.chat.completions.create({
-        model: "llama3.1-70b",
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: `Prompt: ${prompt}\nCurrent Canvas State: ${JSON.stringify(currentState)}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
+  try {
+    const response = await client.chat.completions.create({
+      model: "llama3.1-8b",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Prompt: ${prompt}\nCurrent Canvas State: ${JSON.stringify(currentState)}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+    });
 
-      let aiContent = response.choices[0].message.content;
-      console.log("Raw AI Content:", aiContent);
-
-      // Simple regex to extract JSON if it's wrapped in triple backticks
-      if (aiContent.includes("```")) {
-        aiContent =
-          aiContent.match(/```(?:json)?([\s\S]*?)```/)?.[1] || aiContent;
-      }
-
-      const result = JSON.parse(aiContent.trim());
-
-      return result;
-    } catch (error) {
-      console.error(
-        "AI Generation Error:",
-        error.response?.data || error.message,
-      );
-      throw new Error("Failed to generate AI layout");
+    let aiContent = response.choices[0].message.content;
+    if (aiContent.includes("```")) {
+      aiContent =
+        aiContent.match(/```(?:json)?([\s\S]*?)```/)?.[1] || aiContent;
     }
+
+    const result = JSON.parse(aiContent.trim());
+
+    return result;
+  } catch (error) {
+    console.error(
+      "AI Generation Error:",
+      error.response?.data || error.message,
+    );
+    throw new Error("Failed to generate AI layout");
   }
+}
